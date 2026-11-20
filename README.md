@@ -368,6 +368,15 @@ name, within `REFRESH_EVENTS_INTERVAL` of the upgrade. Events about contracts
 nobody registered cost no RPC work, and a contract upgraded several times
 between two reads is refreshed once.
 
+For example, with `DATABASE_URL` and `RPC_URL` already in the environment:
+
+```console
+$ REFRESH_INTERVAL=6h \
+  REFRESH_EVENTS=true \
+  REFRESH_EVENTS_INTERVAL=10s \
+  sorovault serve
+```
+
 Polling does not go away: `REFRESH_INTERVAL` is required alongside, and keeps
 sweeping as a slow safety net for whatever an event might miss (a refresh that
 failed, for one).
@@ -395,6 +404,21 @@ schedule, since a sweep is not subject to the HTTP restriction. The browse UI
 hides its register form. A common pairing: `REFRESH_INTERVAL=6h READ_ONLY=true`
 publishes a registry that stays current but takes nothing new from the public.
 
+For example, start a mirror that only follows upgrades:
+
+```console
+$ REFRESH_INTERVAL=6h READ_ONLY=true sorovault serve   # terminal 1
+$ curl -si -X POST localhost:8080/api/contracts \      # terminal 2
+    -H 'content-type: application/json' \
+    -d '{"contract_id":"CDZZXVGUCLBUTE3WDD6TF2NXPTBPOYTVPPBBIZMSPVIQLUG226XJ4PAN"}'
+HTTP/1.1 405 Method Not Allowed
+Content-Type: application/json; charset=utf-8
+
+{"error":"this SoroVault is running read-only; write access is disabled"}
+$ curl -s localhost:8080/api/stats | jq .read_only
+true
+```
+
 ### Restricting writes to token holders
 
 Set `API_TOKENS` to one or more comma-separated tokens and every write
@@ -412,6 +436,18 @@ Tokens are compared in constant time and never logged or echoed. Note the
 boundary honestly: the browse UI has no way to carry a bearer token, so its
 register form is disabled while tokens are configured — use the JSON API for
 writes. `GET /api/stats` stays public and is unaffected.
+
+For example, generate a token, start the server with it, and pass it on a write
+(the token stays in the environment of both shells):
+
+```console
+$ export API_TOKENS="$(openssl rand -hex 32)"
+$ sorovault serve                                  # terminal 1
+$ curl -X POST localhost:8080/api/contracts \      # terminal 2
+    -H 'content-type: application/json' \
+    -H "Authorization: Bearer $API_TOKENS" \
+    -d '{"contract_id":"CDZZXVGUCLBUTE3WDD6TF2NXPTBPOYTVPPBBIZMSPVIQLUG226XJ4PAN"}'
+```
 
 ### Telling the world about an upgrade
 
